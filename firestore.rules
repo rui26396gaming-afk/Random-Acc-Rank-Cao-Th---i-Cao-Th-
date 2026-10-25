@@ -1,0 +1,174 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Test Connection endpoint for connection validation on boot
+    match /test/connection {
+      allow read: if true;
+    }
+
+    // Hardened Global Helpers
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Bootstrapped Admin check with runtime email pthina650@gmail.com and admin collection lookup
+    function isAdmin() {
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        (request.auth.token.email == 'pthina650@gmail.com')
+      );
+    }
+
+    // Entity Validation Helpers
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'email', 'role', 'xp', 'level', 'streak']) &&
+        data.keys().hasOnly(['uid', 'email', 'displayName', 'photoURL', 'role', 'xp', 'level', 'streak', 'createdAt', 'updatedAt']) &&
+        data.uid is string && data.uid.size() > 0 && data.uid.size() <= 128 &&
+        data.email is string && data.email.size() <= 200 &&
+        data.role in ['admin', 'user'] &&
+        data.xp is number && data.xp >= 0 &&
+        data.level is number && data.level >= 1 &&
+        data.streak is number && data.streak >= 0 &&
+        (!('displayName' in data) || data.displayName == null || (data.displayName is string && data.displayName.size() <= 200)) &&
+        (!('photoURL' in data) || data.photoURL == null || (data.photoURL is string && data.photoURL.size() <= 1500));
+    }
+
+    function isValidAnnouncement(data) {
+      return data.keys().hasAll(['title', 'content', 'authorEmail', 'priority']) &&
+        data.keys().hasOnly(['title', 'content', 'authorEmail', 'priority', 'createdAt']) &&
+        data.title is string && data.title.size() > 0 && data.title.size() <= 200 &&
+        data.content is string && data.content.size() > 0 && data.content.size() <= 2000 &&
+        data.authorEmail is string && data.authorEmail.size() <= 200 &&
+        data.priority in ['low', 'normal', 'urgent'];
+    }
+
+    function isValidTask(data) {
+      return data.keys().hasAll(['userId', 'title', 'category', 'priority', 'xp', 'completed']) &&
+        data.keys().hasOnly(['userId', 'title', 'category', 'priority', 'xp', 'completed', 'createdAt']) &&
+        data.userId is string && data.userId == request.auth.uid &&
+        data.title is string && data.title.size() > 0 && data.title.size() <= 300 &&
+        data.category in ['study', 'home', 'project', 'health'] &&
+        data.priority in ['low', 'medium', 'high'] &&
+        data.xp is number && data.xp >= 0 &&
+        data.completed is bool;
+    }
+
+    function isValidHighlight(data) {
+      return data.keys().hasAll(['userId', 'title', 'category', 'content', 'moodTag']) &&
+        data.keys().hasOnly(['userId', 'title', 'category', 'content', 'authorOrSource', 'moodTag', 'createdAt']) &&
+        data.userId is string && data.userId == request.auth.uid &&
+        data.title is string && data.title.size() > 0 && data.title.size() <= 200 &&
+        data.category in ['game_highlight', 'quote', 'movie', 'study_milestone'] &&
+        data.content is string && data.content.size() > 0 && data.content.size() <= 2000 &&
+        data.moodTag is string && data.moodTag.size() <= 50 &&
+        (!('authorOrSource' in data) || data.authorOrSource == null || (data.authorOrSource is string && data.authorOrSource.size() <= 200));
+    }
+
+    function isValidStudyLeaderboard(data) {
+      return data.keys().hasAll(['userId', 'displayName', 'totalSeconds', 'todaySeconds', 'weekSeconds', 'lastActiveDate']) &&
+        data.keys().hasOnly(['userId', 'displayName', 'photoURL', 'totalSeconds', 'todaySeconds', 'weekSeconds', 'lastActiveDate', 'weekIdentifier', 'isStudying', 'lastHeartbeat', 'level', 'streak', 'updatedAt']) &&
+        data.userId is string && data.userId == request.auth.uid &&
+        data.displayName is string && data.displayName.size() > 0 && data.displayName.size() <= 100 &&
+        (!('photoURL' in data) || data.photoURL == null || (data.photoURL is string && data.photoURL.size() <= 500)) &&
+        data.totalSeconds is number && data.totalSeconds >= 0 &&
+        data.todaySeconds is number && data.todaySeconds >= 0 &&
+        data.weekSeconds is number && data.weekSeconds >= 0 &&
+        data.lastActiveDate is string && data.lastActiveDate.size() <= 20 &&
+        (!('weekIdentifier' in data) || (data.weekIdentifier is string && data.weekIdentifier.size() <= 20)) &&
+        (!('isStudying' in data) || data.isStudying is bool) &&
+        (!('lastHeartbeat' in data) || data.lastHeartbeat is number) &&
+        (!('level' in data) || (data.level is number && data.level >= 1)) &&
+        (!('streak' in data) || (data.streak is number && data.streak >= 0)) &&
+        (!('updatedAt' in data) || (data.updatedAt is string && data.updatedAt.size() <= 50));
+    }
+
+    // Admins Collection
+    match /admins/{adminId} {
+      allow get: if isSignedIn() && isValidId(adminId);
+      allow list: if isAdmin();
+      allow write: if isAdmin() && isValidId(adminId);
+    }
+
+    // Study Leaderboard Collection (Automated zero-touch study tracking)
+    match /study_leaderboard/{userId} {
+      allow get: if isValidId(userId);
+      allow list: if true;
+      allow create: if isOwner(userId) && isValidId(userId) && isValidStudyLeaderboard(incoming());
+      allow update: if isValidId(userId) && (isAdmin() || (isOwner(userId) && isValidStudyLeaderboard(incoming()) && incoming().userId == existing().userId));
+      allow delete: if isAdmin() && isValidId(userId);
+    }
+
+    // Users Collection (Profile & Role)
+    match /users/{userId} {
+      // Individual user read or admin read
+      allow get: if isSignedIn() && isValidId(userId) && (isOwner(userId) || isAdmin());
+      // Admin only can query full user roster
+      allow list: if isAdmin();
+      
+      // User can create own profile as 'user' unless admin bootstraps
+      allow create: if isValidId(userId) && isValidUser(incoming()) && incoming().uid == userId && (
+        isAdmin() || (isOwner(userId) && incoming().role == 'user')
+      );
+
+      // User can update profile, but CANNOT self-escalate role. Admins can update roles.
+      allow update: if isValidId(userId) && isValidUser(incoming()) && incoming().uid == userId && (
+        isAdmin() || (
+          isOwner(userId) &&
+          incoming().role == existing().role &&
+          incoming().email == existing().email &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'xp', 'level', 'streak', 'updatedAt'])
+        )
+      );
+
+      allow delete: if isAdmin() && isValidId(userId);
+
+      // User Personal Tasks Subcollection
+      match /tasks/{taskId} {
+        allow get: if isValidId(taskId) && (isOwner(userId) || isAdmin());
+        allow list: if isOwner(userId) || isAdmin();
+        allow create: if isValidId(taskId) && isOwner(userId) && isValidTask(incoming());
+        allow update: if isValidId(taskId) && (isOwner(userId) || isAdmin()) && isValidTask(incoming());
+        allow delete: if isValidId(taskId) && (isOwner(userId) || isAdmin());
+      }
+
+      // User Highlights Subcollection
+      match /highlights/{highlightId} {
+        allow get: if isValidId(highlightId) && (isOwner(userId) || isAdmin());
+        allow list: if isOwner(userId) || isAdmin();
+        allow create: if isValidId(highlightId) && isOwner(userId) && isValidHighlight(incoming());
+        allow update: if isValidId(highlightId) && (isOwner(userId) || isAdmin()) && isValidHighlight(incoming());
+        allow delete: if isValidId(highlightId) && (isOwner(userId) || isAdmin());
+      }
+    }
+
+    // Announcements Collection (Broadcast from Admin to all users)
+    match /announcements/{announcementId} {
+      allow get: if isValidId(announcementId);
+      allow list: if true;
+      allow create: if isAdmin() && isValidId(announcementId) && isValidAnnouncement(incoming());
+      allow update: if isAdmin() && isValidId(announcementId) && isValidAnnouncement(incoming());
+      allow delete: if isAdmin() && isValidId(announcementId);
+    }
+  }
+}

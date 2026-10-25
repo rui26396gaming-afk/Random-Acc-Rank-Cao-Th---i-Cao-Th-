@@ -1,0 +1,6 @@
+{
+  "name": "OmniLife - Hệ Sinh Thái Toàn Năng & AI Companion",
+  "description": "Hệ sinh thái AI 4 trụ cột: Học tập & Trí tuệ, Giải trí & Gaming, Sinh hoạt & Quản lý bản thân, cùng AI Companion với chuyển đổi trạng thái Focus, Gaming, Chill.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

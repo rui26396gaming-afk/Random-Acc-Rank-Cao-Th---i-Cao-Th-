@@ -1,0 +1,123 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "User profile with role-based access control (admin vs user)",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "email": { "type": "string", "format": "email", "description": "User email address" },
+        "displayName": { "type": "string", "maxLength": 100, "description": "Display name" },
+        "photoURL": { "type": "string", "maxLength": 500, "description": "Avatar photo URL" },
+        "role": { "type": "string", "enum": ["admin", "user"], "description": "RBAC user role" },
+        "xp": { "type": "number", "description": "Experience points earned" },
+        "level": { "type": "number", "description": "Current player level" },
+        "streak": { "type": "number", "description": "Continuous login streak in days" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "role", "xp", "level", "streak"]
+    },
+    "AdminRecord": {
+      "title": "Admin Record",
+      "description": "Authorized administrator lookup document",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "format": "email" },
+        "grantedAt": { "type": "string", "format": "date-time" },
+        "grantedBy": { "type": "string" }
+      },
+      "required": ["email", "grantedAt"]
+    },
+    "Announcement": {
+      "title": "System Announcement",
+      "description": "Broadcast announcement sent by Admin to all users",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "maxLength": 200 },
+        "content": { "type": "string", "maxLength": 2000 },
+        "authorEmail": { "type": "string", "format": "email" },
+        "priority": { "type": "string", "enum": ["low", "normal", "urgent"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "content", "authorEmail", "priority"]
+    },
+    "UserTask": {
+      "title": "User Task",
+      "description": "Individual task item synced to Firestore for persistent gamification",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "title": { "type": "string", "maxLength": 300 },
+        "category": { "type": "string", "enum": ["study", "home", "project", "health"] },
+        "priority": { "type": "string", "enum": ["low", "medium", "high"] },
+        "xp": { "type": "number" },
+        "completed": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "title", "category", "priority", "xp", "completed"]
+    },
+    "UserHighlight": {
+      "title": "User Memory Highlight",
+      "description": "Saved memory highlight or gaming clip milestone",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "title": { "type": "string", "maxLength": 200 },
+        "category": { "type": "string", "enum": ["game_highlight", "quote", "movie", "study_milestone"] },
+        "content": { "type": "string", "maxLength": 2000 },
+        "authorOrSource": { "type": "string", "maxLength": 200 },
+        "moodTag": { "type": "string", "maxLength": 50 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "title", "category", "content", "moodTag"]
+    },
+    "StudyLeaderboardEntry": {
+      "title": "Study Leaderboard Entry",
+      "description": "Public study leaderboard tracking accumulated study time automatically without button presses",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "maxLength": 128 },
+        "displayName": { "type": "string", "maxLength": 100 },
+        "photoURL": { "type": "string", "maxLength": 500 },
+        "totalSeconds": { "type": "number", "description": "Cumulative study seconds" },
+        "todaySeconds": { "type": "number", "description": "Study seconds accumulated today" },
+        "weekSeconds": { "type": "number", "description": "Study seconds accumulated this week" },
+        "lastActiveDate": { "type": "string", "maxLength": 20, "description": "Date string YYYY-MM-DD" },
+        "weekIdentifier": { "type": "string", "maxLength": 20, "description": "ISO week string YYYY-WW" },
+        "isStudying": { "type": "boolean", "description": "Currently actively studying" },
+        "lastHeartbeat": { "type": "number", "description": "Epoch timestamp of last active heartbeat" },
+        "level": { "type": "number" },
+        "streak": { "type": "number" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "displayName", "totalSeconds", "todaySeconds", "weekSeconds", "lastActiveDate"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "User profiles with role, XP, and metadata"
+    },
+    "/admins/{adminId}": {
+      "schema": { "$ref": "#/entities/AdminRecord" },
+      "description": "Admin identity records"
+    },
+    "/announcements/{announcementId}": {
+      "schema": { "$ref": "#/entities/Announcement" },
+      "description": "Broadcast announcements from admins"
+    },
+    "/study_leaderboard/{userId}": {
+      "schema": { "$ref": "#/entities/StudyLeaderboardEntry" },
+      "description": "Community study leaderboard ranking by automated study time"
+    },
+    "/users/{userId}/tasks/{taskId}": {
+      "schema": { "$ref": "#/entities/UserTask" },
+      "description": "User personal tasks"
+    },
+    "/users/{userId}/highlights/{highlightId}": {
+      "schema": { "$ref": "#/entities/UserHighlight" },
+      "description": "User memory highlights"
+    }
+  }
+}
